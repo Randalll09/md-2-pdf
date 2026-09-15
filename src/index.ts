@@ -43,12 +43,17 @@ function buildMcpServer() {
       description:
         "사용자가 첨부한 마크다운(.md) 원문을 그대로 PDF로 변환합니다. " +
         "내용을 요약하거나 재구성하지 말고 원문 그대로 content에 담아 호출하세요. " +
+        "title은 파일명으로 쓰입니다. 사용자가 파일명을 알려주지 않았고 content에도 " +
+        "'#' 제목이 없다면, title을 비워두지 말고 내용을 보고 적절히 짧은 제목을 직접 " +
+        "만들어서 채워 호출하세요. " +
         "결과로 다운로드 가능한 URL을 반환하니, 그 링크를 사용자에게 그대로 안내해주세요.",
       inputSchema: {
         title: z
           .string()
+          .optional()
           .describe(
-            "파일명으로 사용할 제목. content가 이미 '#' 제목으로 시작하면 본문에는 중복 추가되지 않습니다."
+            "파일명으로 사용할 제목. content가 이미 '#' 제목으로 시작하면 본문에는 중복 추가되지 않습니다. " +
+              "사용자가 파일명을 지정하지 않았다면 내용을 보고 적절한 제목을 만들어 채워주세요."
           ),
         content: z
           .string()
@@ -60,11 +65,16 @@ function buildMcpServer() {
     async ({ title, content }) => {
       await fs.mkdir(FILES_DIR, { recursive: true });
 
-      const alreadyHasHeading = /^\s*#{1,6}\s+/.test(content);
-      const markdown = alreadyHasHeading ? content : `# ${title}\n\n${content}`;
+      const headingMatch = content.match(/^\s*#{1,6}\s+(.+)$/m);
+      const alreadyHasHeading = Boolean(headingMatch);
+      // 챗봇이 title을 채워 호출하는 게 정상 경로지만, 혹시 비어 오더라도 본문 제목
+      // 또는 날짜 기반 이름으로 대체해 실패 없이 진행합니다.
+      const resolvedTitle =
+        title?.trim() || headingMatch?.[1]?.trim() || `문서-${new Date().toISOString().slice(0, 10)}`;
+      const markdown = alreadyHasHeading ? content : `# ${resolvedTitle}\n\n${content}`;
 
       const uniqueId = randomUUID().slice(0, 8);
-      const fileName = `${sanitizeFileName(title)}-${uniqueId}.pdf`;
+      const fileName = `${sanitizeFileName(resolvedTitle)}-${uniqueId}.pdf`;
       const destPath = path.join(FILES_DIR, fileName);
 
       const pdf = await mdToPdf(
