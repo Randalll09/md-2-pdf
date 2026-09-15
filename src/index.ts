@@ -18,10 +18,6 @@ const PORT = Number(process.env.PORT || 3000);
 // 값을 비워두면(미설정) 인증 없이 열립니다 — 운영 환경에서는 꼭 설정하세요.
 const AUTH_TOKEN = process.env.MCP_AUTH_TOKEN || "";
 const FILES_DIR = path.join(process.cwd(), "generated-pdfs");
-// 챗봇이 생성된 파일을 직접 읽어가는 공유 작업영역(볼륨 마운트 경로).
-// 이 경로가 존재/마운트되어 있지 않은 환경(로컬 개발 등)에서도 서버가 죽지 않도록,
-// 복사에 실패하면 경고만 남기고 기존 링크/base64 응답은 그대로 반환합니다.
-const CHATBOT_OUTPUT_DIR = process.env.CHATBOT_OUTPUT_DIR || "/mnt/outputs";
 
 function sanitizeFileName(name: string): string {
   return (
@@ -99,33 +95,6 @@ function buildMcpServer() {
 
       if (!pdf || !pdf.filename) {
         throw new Error("PDF 생성에 실패했습니다.");
-      }
-
-      // 챗봇의 작업영역(/mnt/outputs)에도 동일한 파일을 저장합니다.
-      // 저장에 성공하면 이 경로가 응답의 기준(primary)이 되고, HTTP 링크/base64 첨부는
-      // 작업영역이 마운트되지 않은 환경(로컬 개발 등)을 위한 폴백으로만 사용됩니다.
-      const workspacePath = path.join(CHATBOT_OUTPUT_DIR, fileName);
-      let savedToWorkspace = false;
-      try {
-        await fs.mkdir(CHATBOT_OUTPUT_DIR, { recursive: true });
-        await fs.copyFile(destPath, workspacePath);
-        savedToWorkspace = true;
-      } catch (err) {
-        console.warn(
-          `챗봇 작업영역(${CHATBOT_OUTPUT_DIR})에 파일 저장 실패, 링크/첨부 응답으로 대체합니다:`,
-          err
-        );
-      }
-
-      if (savedToWorkspace) {
-        return {
-          content: [
-            {
-              type: "text" as const,
-              text: `PDF가 생성되어 작업영역에 저장되었습니다: ${workspacePath}`,
-            },
-          ],
-        };
       }
 
       const downloadUrl = `${BASE_URL}/files/${encodeURIComponent(fileName)}`;
