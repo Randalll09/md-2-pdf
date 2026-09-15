@@ -41,24 +41,26 @@ function buildMcpServer() {
     {
       title: "create_pdf",
       description:
-        "사용자가 첨부한 마크다운(.md) 원문을 그대로 PDF로 변환합니다. " +
-        "내용을 요약하거나 재구성하지 말고 원문 그대로 content에 담아 호출하세요. " +
-        "title은 파일명으로 쓰입니다. 사용자가 파일명을 알려주지 않았고 content에도 " +
-        "'#' 제목이 없다면, title을 비워두지 말고 내용을 보고 적절히 짧은 제목을 직접 " +
-        "만들어서 채워 호출하세요. " +
-        "결과로 다운로드 가능한 URL을 반환하니, 그 링크를 사용자에게 그대로 안내해주세요.",
+        "Converts the user's attached markdown (.md) source into a PDF, unchanged. " +
+        "Do not summarize or rewrite the content — pass the original text as-is in `content`. " +
+        "`title` is used as the file name. If the user didn't give a file name and `content` " +
+        "has no '#' heading either, don't leave title empty — come up with a short, suitable " +
+        "title yourself based on the content and pass it. " +
+        "The result includes a downloadable URL; pass that link along to the user as-is.",
       inputSchema: {
         title: z
           .string()
           .optional()
           .describe(
-            "파일명으로 사용할 제목. content가 이미 '#' 제목으로 시작하면 본문에는 중복 추가되지 않습니다. " +
-              "사용자가 파일명을 지정하지 않았다면 내용을 보고 적절한 제목을 만들어 채워주세요."
+            "Title to use as the file name. If `content` already starts with a '#' heading, " +
+              "it won't be duplicated in the body. If the user didn't specify a file name, " +
+              "generate a suitable title from the content and fill it in."
           ),
         content: z
           .string()
           .describe(
-            "첨부된 마크다운 원문 그대로. 요약/재작성 금지. #, -, **bold**, 코드블록 등 마크다운 문법을 그대로 전달하세요."
+            "The attached markdown source, verbatim. Do not summarize or rewrite it. " +
+              "Pass markdown syntax (#, -, **bold**, code blocks, etc.) through unchanged."
           ),
       },
     },
