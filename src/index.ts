@@ -141,7 +141,11 @@ app.use(express.json());
 
 if (AUTH_TOKEN) {
   app.use((req, res, next) => {
-    if (req.path === "/health") return next();
+    // /health와 /files는 인증 없이 열어둡니다: 특히 /files는 챗봇이 아니라
+    // 사용자가 브라우저에서 직접 클릭해서 여는 다운로드 링크라 Authorization
+    // 헤더를 붙일 방법이 없습니다. 파일명에 랜덤 8자리가 붙어 있어 추측하기
+    // 어려운 공유 링크 수준의 보호는 유지됩니다.
+    if (req.path === "/health" || req.path.startsWith("/files/")) return next();
     const auth = req.header("authorization") || "";
     if (auth === `Bearer ${AUTH_TOKEN}`) return next();
     res.status(401).json({ error: "unauthorized" });
