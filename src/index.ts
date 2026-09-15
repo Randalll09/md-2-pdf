@@ -18,6 +18,10 @@ const PORT = Number(process.env.PORT || 3000);
 // 값을 비워두면(미설정) 인증 없이 열립니다 — 운영 환경에서는 꼭 설정하세요.
 const AUTH_TOKEN = process.env.MCP_AUTH_TOKEN || "";
 const FILES_DIR = path.join(process.cwd(), "generated-pdfs");
+// 챗봇이 생성된 파일을 직접 읽어가는 공유 작업영역(볼륨 마운트 경로).
+// 이 경로가 존재/마운트되어 있지 않은 환경(로컬 개발 등)에서도 서버가 죽지 않도록,
+// 복사에 실패하면 경고만 남기고 기존 링크/base64 응답은 그대로 반환합니다.
+const CHATBOT_OUTPUT_DIR = process.env.CHATBOT_OUTPUT_DIR || "/mnt/outputs";
 
 function sanitizeFileName(name: string): string {
   return (
@@ -37,30 +41,42 @@ function buildMcpServer() {
     {
       title: "create_pdf",
       description:
-        "사용자가 첨부한 마크다운(.md) 원문을 그대로 PDF로 변환합니다. " +
-        "내용을 요약하거나 재구성하지 말고 원문 그대로 content에 담아 호출하세요. " +
-        "결과로 다운로드 가능한 URL을 반환하니, 그 링크를 사용자에게 그대로 안내해주세요.",
+        "Converts the user's attached markdown (.md) source into a PDF, unchanged. " +
+        "Do not summarize or rewrite the content — pass the original text as-is in `content`. " +
+        "`title` is used as the file name. If the user didn't give a file name and `content` " +
+        "has no '#' heading either, don't leave title empty — come up with a short, suitable " +
+        "title yourself based on the content and pass it. " +
+        "The result includes a downloadable URL; pass that link along to the user as-is.",
       inputSchema: {
         title: z
           .string()
+          .optional()
           .describe(
-            "파일명으로 사용할 제목. content가 이미 '#' 제목으로 시작하면 본문에는 중복 추가되지 않습니다."
+            "Title to use as the file name. If `content` already starts with a '#' heading, " +
+              "it won't be duplicated in the body. If the user didn't specify a file name, " +
+              "generate a suitable title from the content and fill it in."
           ),
         content: z
           .string()
           .describe(
-            "첨부된 마크다운 원문 그대로. 요약/재작성 금지. #, -, **bold**, 코드블록 등 마크다운 문법을 그대로 전달하세요."
+            "The attached markdown source, verbatim. Do not summarize or rewrite it. " +
+              "Pass markdown syntax (#, -, **bold**, code blocks, etc.) through unchanged."
           ),
       },
     },
     async ({ title, content }) => {
       await fs.mkdir(FILES_DIR, { recursive: true });
 
-      const alreadyHasHeading = /^\s*#{1,6}\s+/.test(content);
-      const markdown = alreadyHasHeading ? content : `# ${title}\n\n${content}`;
+      const headingMatch = content.match(/^\s*#{1,6}\s+(.+)$/m);
+      const alreadyHasHeading = Boolean(headingMatch);
+      // 챗봇이 title을 채워 호출하는 게 정상 경로지만, 혹시 비어 오더라도 본문 제목
+      // 또는 날짜 기반 이름으로 대체해 실패 없이 진행합니다.
+      const resolvedTitle =
+        title?.trim() || headingMatch?.[1]?.trim() || `문서-${new Date().toISOString().slice(0, 10)}`;
+      const markdown = alreadyHasHeading ? content : `# ${resolvedTitle}\n\n${content}`;
 
       const uniqueId = randomUUID().slice(0, 8);
-      const fileName = `${sanitizeFileName(title)}-${uniqueId}.pdf`;
+      const fileName = `${sanitizeFileName(resolvedTitle)}-${uniqueId}.pdf`;
       const destPath = path.join(FILES_DIR, fileName);
 
       const pdf = await mdToPdf(
@@ -83,6 +99,17 @@ function buildMcpServer() {
 
       if (!pdf || !pdf.filename) {
         throw new Error("PDF 생성에 실패했습니다.");
+      }
+
+      // 챗봇의 작업영역(/mnt/outputs)에도 동일한 파일을 저장합니다.
+      try {
+        await fs.mkdir(CHATBOT_OUTPUT_DIR, { recursive: true });
+        await fs.copyFile(destPath, path.join(CHATBOT_OUTPUT_DIR, fileName));
+      } catch (err) {
+        console.warn(
+          `챗봇 작업영역(${CHATBOT_OUTPUT_DIR})에 파일 저장 실패, 링크/첨부 응답은 계속 진행합니다:`,
+          err
+        );
       }
 
       const downloadUrl = `${BASE_URL}/files/${encodeURIComponent(fileName)}`;
