@@ -102,14 +102,30 @@ function buildMcpServer() {
       }
 
       // 챗봇의 작업영역(/mnt/outputs)에도 동일한 파일을 저장합니다.
+      // 저장에 성공하면 이 경로가 응답의 기준(primary)이 되고, HTTP 링크/base64 첨부는
+      // 작업영역이 마운트되지 않은 환경(로컬 개발 등)을 위한 폴백으로만 사용됩니다.
+      const workspacePath = path.join(CHATBOT_OUTPUT_DIR, fileName);
+      let savedToWorkspace = false;
       try {
         await fs.mkdir(CHATBOT_OUTPUT_DIR, { recursive: true });
-        await fs.copyFile(destPath, path.join(CHATBOT_OUTPUT_DIR, fileName));
+        await fs.copyFile(destPath, workspacePath);
+        savedToWorkspace = true;
       } catch (err) {
         console.warn(
-          `챗봇 작업영역(${CHATBOT_OUTPUT_DIR})에 파일 저장 실패, 링크/첨부 응답은 계속 진행합니다:`,
+          `챗봇 작업영역(${CHATBOT_OUTPUT_DIR})에 파일 저장 실패, 링크/첨부 응답으로 대체합니다:`,
           err
         );
+      }
+
+      if (savedToWorkspace) {
+        return {
+          content: [
+            {
+              type: "text" as const,
+              text: `PDF가 생성되어 작업영역에 저장되었습니다: ${workspacePath}`,
+            },
+          ],
+        };
       }
 
       const downloadUrl = `${BASE_URL}/files/${encodeURIComponent(fileName)}`;
