@@ -1,0 +1,23 @@
+{
+  "name": "pdf-mcp-server",
+  "version": "2.0.0",
+  "description": "회사 챗봇 확장 연결(URL)용 - 마크다운을 PDF로 변환해 다운로드 링크를 돌려주는 원격 MCP 서버",
+  "type": "module",
+  "main": "build/index.js",
+  "scripts": {
+    "build": "tsc",
+    "start": "node build/index.js",
+    "dev": "tsc --watch"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.0.4",
+    "express": "^4.21.1",
+    "md-to-pdf": "^5.2.4",
+    "zod": "^3.23.8"
+  },
+  "devDependencies": {
+    "typescript": "^5.6.3",
+    "@types/express": "^4.17.21",
+    "@types/node": "^22.9.0"
+  }
+}
